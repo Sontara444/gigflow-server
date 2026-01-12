@@ -28,7 +28,7 @@ const getGigs = async (req, res) => {
         : {};
 
     try {
-        const gigs = await Gig.find({ ...keyword, status: 'open' }).populate('ownerId', 'name email');
+        const gigs = await Gig.find({ ...keyword }).populate('ownerId', 'name email');
         res.json(gigs);
     } catch (error) {
         res.status(500).json({ message: error.message });
