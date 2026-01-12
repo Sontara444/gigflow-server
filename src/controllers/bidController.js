@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Bid = require('../models/Bid');
 const Gig = require('../models/Gig');
 
@@ -59,40 +60,65 @@ const getBidsByGig = async (req, res) => {
 
 const hireFreelancer = async (req, res) => {
     const { bidId } = req.params;
+    const session = await mongoose.startSession();
 
     try {
-        const bid = await Bid.findById(bidId).populate('gigId');
+        session.startTransaction();
+
+        // 1. Fetch Bid and Gig within session to ensure consistency
+        const bid = await Bid.findById(bidId).populate('gigId').session(session);
 
         if (!bid) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: 'Bid not found' });
         }
 
-        const gig = await Gig.findById(bid.gigId._id);
+        const gig = await Gig.findById(bid.gigId._id).session(session);
 
         if (gig.ownerId.toString() !== req.user._id.toString()) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(401).json({ message: 'Not authorized to hire for this gig' });
         }
 
+        // 2. Transactonal Integrity Check: Ensure gig is still open
         if (gig.status !== 'open') {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ message: 'Gig is already assigned' });
         }
 
-        // 1. Mark this bid as hired
+        // 3. Mark this bid as hired
         bid.status = 'hired';
-        await bid.save();
+        await bid.save({ session });
 
-        // 2. Mark all other bids for this gig as rejected
+        // 4. Mark all other bids for this gig as rejected
         await Bid.updateMany(
             { gigId: gig._id, _id: { $ne: bidId } },
-            { status: 'rejected' }
+            { status: 'rejected' },
+            { session }
         );
 
-        // 3. Update gig status to assigned
+        // 5. Update gig status to assigned
         gig.status = 'assigned';
-        await gig.save();
+        await gig.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        // 6. Real-time Notification
+        const io = req.app.get('io');
+        // Notify the freelancer privately
+        io.to(bid.freelancerId.toString()).emit('hire_notification', {
+            message: `You have been hired for ${gig.title}!`,
+            gigId: gig._id,
+        });
 
         res.json({ message: 'Freelancer hired successfully', bid });
     } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
         res.status(500).json({ message: error.message });
     }
 };
