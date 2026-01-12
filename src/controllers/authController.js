@@ -41,6 +41,7 @@ const registerUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                token,
             });
         } else {
             res.status(400).json({ message: 'Invalid user data' });
@@ -70,6 +71,7 @@ const loginUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                token,
             });
         } else {
             res.status(401).json({ message: 'Invalid email or password' });
