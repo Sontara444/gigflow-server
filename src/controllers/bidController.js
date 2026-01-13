@@ -21,6 +21,10 @@ const submitBid = async (req, res) => {
             return res.status(400).json({ message: 'Owner cannot bid on their own gig' });
         }
 
+        if (price > gig.budget) {
+            return res.status(400).json({ message: 'Bid cannot exceed project budget' });
+        }
+
         const existingBid = await Bid.findOne({ gigId, freelancerId: req.user._id });
         if (existingBid) {
             return res.status(400).json({ message: 'You have already placed a bid on this gig' });
