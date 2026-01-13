@@ -71,7 +71,7 @@ const getGigs = async (req, res) => {
                     }
                 }
             },
-            { $sort: { createdAt: -1 } }
+            { $sort: { status: -1, createdAt: -1 } }
         ]);
 
         res.json(gigs);
