@@ -24,6 +24,15 @@ We use a **Room-based architecture** in `server.js`.
 We use `Gig.aggregate([...])` in `gigController.js`.
 *   Effectively joins Collections to return calculated fields (like `bidsCount`) in a single DB round-trip.
 
+### 4. Chat & Messaging Architecture 📨
+*   **Dual-Layer Notifications**:
+    *   **Socket Events**: `receive_message` and `messages_read` for real-time UI updates.
+    *   **API Fallback**: `GET /api/messages` calculates unread counts for initial state.
+*   **Read Status Logic**:
+    *   `PUT /api/messages/read/:senderId`: updates message status in bulk and triggers a socket event to the sender.
+*   **Context Matching**:
+    *   `GET /api/gigs/matches/:userId`: Aggregation to find common gigs between two users (e.g., Freelancer hired on Client's gig).
+
 ## 📡 API Endpoints
 *   `POST /api/auth/*`: Register, Login, Logout (Cookie-based).
 *   `GET /api/gigs/*`: Search, post, and manage gigs.
