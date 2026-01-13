@@ -9,6 +9,7 @@ router.route('/')
     .get(getGigs);
 
 router.get('/my-gigs', protect, getMyGigs);
+router.get('/matches/:otherUserId', protect, require('../controllers/gigController').getGigMatches);
 router.route('/:id').get(getGigById);
 
 module.exports = router;

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Gig = require('../models/Gig');
 
 const createGig = async (req, res) => {
@@ -145,9 +146,56 @@ const getMyGigs = async (req, res) => {
     }
 };
 
+const getGigMatches = async (req, res) => {
+    try {
+        const myId = req.user._id;
+        const otherUserId = req.params.otherUserId;
+
+        // Find gigs where:
+        // 1. I am the owner AND they are a bidder
+        // 2. OR they are the owner AND I am a bidder
+        const matches = await Gig.aggregate([
+            {
+                $lookup: {
+                    from: 'bids',
+                    localField: '_id',
+                    foreignField: 'gigId',
+                    as: 'bids'
+                }
+            },
+            {
+                $match: {
+                    $or: [
+                        {
+                            ownerId: myId,
+                            'bids.freelancerId': new mongoose.Types.ObjectId(otherUserId)
+                        },
+                        {
+                            ownerId: new mongoose.Types.ObjectId(otherUserId),
+                            'bids.freelancerId': myId
+                        }
+                    ]
+                }
+            },
+            {
+                $project: {
+                    title: 1,
+                    status: 1,
+                    ownerId: 1
+                }
+            }
+        ]);
+
+        res.json(matches);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createGig,
     getGigs,
     getGigById,
     getMyGigs,
+    getGigMatches,
 };
