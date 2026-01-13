@@ -24,7 +24,6 @@ const io = new Server(server, {
 app.set('io', io);
 
 io.on('connection', (socket) => {
-    // Join a room based on user ID for private notifications
     socket.on('join_room', (userId) => {
         if (userId) {
             socket.join(userId);
@@ -33,7 +32,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // console.log('User disconnected');
     });
 });
 
@@ -55,6 +53,7 @@ const bidRoutes = require('./routes/bidRoutes');
 app.use('/api/auth', authRoutes);
 app.use('/api/gigs', gigRoutes);
 app.use('/api/bids', bidRoutes);
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 
 const PORT = process.env.PORT || 5000;
 

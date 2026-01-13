@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Bid = require('../models/Bid');
 const Gig = require('../models/Gig');
+const Notification = require('../models/Notification');
 
 const submitBid = async (req, res) => {
     const { gigId, message, price } = req.body;
@@ -16,7 +17,6 @@ const submitBid = async (req, res) => {
             return res.status(400).json({ message: 'Gig is not open for bidding' });
         }
 
-        // prevent owner from bidding on their own gig
         if (gig.ownerId.toString() === req.user._id.toString()) {
             return res.status(400).json({ message: 'Owner cannot bid on their own gig' });
         }
@@ -65,7 +65,6 @@ const hireFreelancer = async (req, res) => {
     try {
         session.startTransaction();
 
-        // 1. Fetch Bid and Gig within session to ensure consistency
         const bid = await Bid.findById(bidId).populate('gigId').session(session);
 
         if (!bid) {
@@ -82,37 +81,40 @@ const hireFreelancer = async (req, res) => {
             return res.status(401).json({ message: 'Not authorized to hire for this gig' });
         }
 
-        // 2. Transactonal Integrity Check: Ensure gig is still open
         if (gig.status !== 'open') {
             await session.abortTransaction();
             session.endSession();
             return res.status(400).json({ message: 'Gig is already assigned' });
         }
 
-        // 3. Mark this bid as hired
         bid.status = 'hired';
         await bid.save({ session });
 
-        // 4. Mark all other bids for this gig as rejected
         await Bid.updateMany(
             { gigId: gig._id, _id: { $ne: bidId } },
             { status: 'rejected' },
             { session }
         );
 
-        // 5. Update gig status to assigned
         gig.status = 'assigned';
         await gig.save({ session });
+
+        const notificationMessage = `You have been hired for ${gig.title}!`;
+        const notification = await Notification.create([{
+            recipient: bid.freelancerId,
+            message: notificationMessage,
+            type: 'hire',
+            relatedId: gig._id
+        }], { session });
 
         await session.commitTransaction();
         session.endSession();
 
-        // 6. Real-time Notification
         const io = req.app.get('io');
-        // Notify the freelancer privately
         io.to(bid.freelancerId.toString()).emit('hire_notification', {
-            message: `You have been hired for ${gig.title}!`,
+            message: notificationMessage,
             gigId: gig._id,
+            notification: notification[0]
         });
 
         res.json({ message: 'Freelancer hired successfully', bid });
@@ -123,8 +125,37 @@ const hireFreelancer = async (req, res) => {
     }
 };
 
+const checkMyBid = async (req, res) => {
+    try {
+        const bid = await Bid.findOne({ gigId: req.params.gigId, freelancerId: req.user._id });
+        res.json(bid || null);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getMyBids = async (req, res) => {
+    try {
+        const bids = await Bid.find({ freelancerId: req.user._id })
+            .populate({
+                path: 'gigId',
+                select: 'title description budget status ownerId',
+                populate: {
+                    path: 'ownerId',
+                    select: 'name'
+                }
+            })
+            .sort({ createdAt: -1 });
+        res.json(bids);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     submitBid,
     getBidsByGig,
     hireFreelancer,
+    checkMyBid,
+    getMyBids,
 };
